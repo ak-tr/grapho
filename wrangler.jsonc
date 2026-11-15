@@ -1,5 +1,8 @@
 {
+    "$schema": "node_modules/wrangler/config-schema.json",
     "name": "grapho",
     "compatibility_date": "2026-11-01",
+    // Static site, no Worker code. custom_domain makes Cloudflare create the DNS record and certificate.
+    "routes": [{ "pattern": "grapho.akif.kr", "custom_domain": true }],
     "assets": { "directory": "./dist" }
 }
