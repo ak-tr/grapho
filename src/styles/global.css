@@ -1,0 +1,71 @@
+@import "@fontsource/onest/300.css";
+@import "@fontsource/onest/400.css";
+@import "@fontsource/onest/500.css";
+@import "@fontsource/geist-mono/400.css";
+@import "@fontsource/geist-mono/500.css";
+/* Mosaic tokens: --font-*, plus the colours for every theme. */
+@import "mosaic/tokens.css";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+    font-family: var(--font-sans), sans-serif;
+}
+
+@layer components {
+    .label {
+        @apply mb-1.5 block font-mono text-[11px] uppercase text-neutral-500;
+    }
+    .field {
+        @apply w-full border border-neutral-800 bg-tile-3 px-2.5 py-2 font-mono text-xs text-neutral-200 outline-none placeholder:text-neutral-600 focus-visible:border-neutral-400;
+    }
+    .btn {
+        @apply border border-neutral-800 bg-tile px-3 py-2 font-mono text-xs uppercase text-white outline-none focus-visible:bg-invert focus-visible:text-black disabled:opacity-40 can-hover:hover:bg-invert can-hover:hover:text-black;
+    }
+    .btn-primary {
+        @apply border-invert bg-invert text-black focus-visible:bg-tile focus-visible:text-white can-hover:hover:bg-tile can-hover:hover:text-white;
+    }
+    .check {
+        @apply size-3.5 shrink-0 appearance-none border border-neutral-600 bg-tile-3 outline-none checked:border-invert checked:bg-invert focus-visible:border-white;
+    }
+    .group-title {
+        @apply font-mono text-[11px] uppercase text-neutral-400;
+    }
+}
+
+/* Square colour swatches */
+input[type="color"] {
+    @apply h-9 w-full cursor-pointer border border-neutral-800 bg-tile-3 p-1;
+}
+input[type="color"]::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+input[type="color"]::-webkit-color-swatch,
+input[type="color"]::-moz-color-swatch {
+    border: 0;
+    border-radius: 0;
+}
+
+/* Scrollbars, as on akif.kr: square n-700 thumb on a clear track, n-500 on hover.
+   Chrome and Safari take the ::-webkit-scrollbar rules (square corners); Firefox only has the standard properties */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background-color: rgb(var(--n-700));
+}
+::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(var(--n-500));
+}
+@supports not selector(::-webkit-scrollbar) {
+    * {
+        scrollbar-width: thin;
+        scrollbar-color: rgb(var(--n-700)) transparent;
+    }
+}

@@ -1,0 +1,38 @@
+{
+  "name": "grapho",
+  "type": "module",
+  "private": true,
+  "packageManager": "pnpm@9.14.2",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro build && wrangler dev",
+    "deploy": "astro build && wrangler deploy",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@astrojs/svelte": "^9.1.6",
+    "@fontsource/geist-mono": "^5.3.0",
+    "@fontsource/onest": "^5.3.1",
+    "astro": "^7.4.12",
+    "d3-array": "^3.2.5",
+    "d3-dsv": "^3.0.2",
+    "d3-scale": "^4.0.3",
+    "d3-shape": "^3.2.1",
+    "gifenc": "^1.0.3",
+    "mediabunny": "^1.66.0",
+    "mosaic": "github:ak-tr/mosaic",
+    "svelte": "^5.57.3"
+  },
+  "devDependencies": {
+    "@types/d3-array": "^3.2.2",
+    "@types/d3-dsv": "^3.0.7",
+    "@types/d3-scale": "^4.0.9",
+    "@types/d3-shape": "^3.2.0",
+    "autoprefixer": "^10.6.2",
+    "postcss": "^8.5.33",
+    "tailwindcss": "^3.4",
+    "typescript": "^6.0.3",
+    "wrangler": "^4.162.0"
+  }
+}
