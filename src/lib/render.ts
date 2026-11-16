@@ -54,6 +54,8 @@ export type Config = {
     endLabels: boolean;
     /** Bar charts: each bar's value past its end, inside its end, or none. Unset = past the end if endLabels is on. */
     barValues?: "off" | "end" | "inside";
+    /** Bar charts with several series: side by side in each category, or overlaid at the same size, biggest at the back. Unset = side by side. */
+    barLayout?: "group" | "overlay";
     grid: boolean;
     lineWidth: number;
     pointSize: number;
@@ -330,6 +332,47 @@ export function render(table: Table, c: Config, t: number, fontCss = "", edit = 
         const ticksR = dR ? tickText(dR) : [];
 
         const barValues = c.barValues ?? (c.endLabels ? "end" : "off");
+        // Where series i's bar sits across its category's band: its share of it side by side, or all of it overlaid
+        const overlaid = c.barLayout === "overlay" && ys.length > 1;
+        const across = (i: number, band: number, inner: (i: number) => number | undefined, share: number) => (overlaid ? { at: 0, w: band } : { at: inner(i)!, w: share });
+        // Overlaid bars are drawn after every series, biggest first in each category so none hides another, then their
+        // values on top: the biggest bar's past its end, the ones in front inside their own bars.
+        const layers: { j: number; size: number; svg: string }[] = [];
+        const atop: string[] = [];
+        // A value on an overlaid bar: `out` is just past its own end, `inner` inside it (null if it never fits, NaN while
+        // the bar is still too short) and `final` inside the finished bar, `ext` how much room it takes along the value
+        // axis, `on` its colour inside the bar
+        type Placed = { j: number; size: number; out: number; inner: number | null; final: number | null; preferInside: boolean; ext: number; on: string; color: string; svg: (at: number, fill?: string, inside?: boolean) => string };
+        const outward: Placed[] = [];
+        /** `dir` is the way values grow: -1 up the screen (vertical bars), 1 to the right (horizontal) */
+        function overlay(dir: 1 | -1) {
+            const bars = layers.sort((a, b) => a.j - b.j || b.size - a.size).map((l) => l.svg);
+            const values = [...new Set(outward.map((o) => o.j))].flatMap((j) => {
+                const row = outward.filter((o) => o.j === j).sort((a, b) => b.size - a.size);
+                const near = (a: Placed, b: Placed) => a.final != null && b.final != null && Math.abs(a.final - b.final) < Math.max(a.ext, b.ext);
+                // The biggest bar's value goes where it was asked to, but when the value in front of it would sit right
+                // there too, it steps out past its own end and leaves the inside to the front one. Decided from the
+                // finished bars, so nothing swaps sides while they grow.
+                const [big, front] = row;
+                const bigInside = big.preferInside && big.final != null && !(front && near(big, front));
+                const kept: Placed[] = bigInside ? [big] : [];
+                let edge = NaN; // how far out the last value past the biggest bar reaches
+                return row.map((o, k) => {
+                    const inside = k === 0 ? bigInside : o.final != null && !kept.some((p) => near(p, o));
+                    if (inside) {
+                        if (k > 0) kept.push(o);
+                        return o.inner == null || Number.isNaN(o.inner) ? "" : o.svg(o.inner, o.on, true); // "" while it grows
+                    }
+                    // Past the biggest bar's end, each beyond the last
+                    const at = Number.isNaN(edge) ? big.out : dir < 0 ? Math.min(big.out, edge) : Math.max(big.out, edge);
+                    edge = at + dir * o.ext;
+                    return o.svg(at, o.color, false);
+                });
+            });
+            return [...bars, ...atop, ...values];
+        }
+        // Overlaid parts carry their series' opacity and tag themselves, since they're drawn outside its group
+        const own = (op: number, name: string) => (overlaid ? ` opacity="${r2(op)}"${tag(`series:${name}`)}` : "");
         const valueText = (v: number) => num(v, (n) => n.toLocaleString("en-GB", { minimumFractionDigits: c.decimals, maximumFractionDigits: c.decimals })) + pct;
         const lg = placeLegend(ys.map((y, i) => ({ key: y, name: dual && onRight.has(y) ? `${y} (R)` : y, color: seriesColor(c, y, i) })));
         // Margins come from the widest text each side has to hold
@@ -354,7 +397,7 @@ export function render(table: Table, c: Config, t: number, fontCss = "", edit = 
         const B = H - fs * 2.2 - (c.xLabel ? fs * 1.8 : 0);
         // Values above the bars need room over the tallest one: lower the plot's top just enough to fit them.
         // f is how far below the top of its axis the tallest bar ends, as a share of the plot's height.
-        if (c.type === "bar" && barValues === "end") {
+        if (c.type === "bar" && (barValues === "end" || (barValues === "inside" && c.barLayout === "overlay" && ys.length > 1))) {
             let f = 1;
             ys.forEach((name, i) => {
                 const d = onRight.has(name) ? dR : dL;
@@ -440,9 +483,11 @@ export function render(table: Table, c: Config, t: number, fontCss = "", edit = 
                     if (v == null) return;
                     const h = st.effect === "grow" ? st.p : st.effect === "draw" ? clamp01(st.p * rows.length - j) : st.effect === "each" ? each(st, j, rows.length) : 1;
                     const top = base + (y(v) - base) * h;
-                    const bx = px(j) + inner(i)!;
-                    const bw = inner.bandwidth();
-                    g.push(`<rect x="${r2(bx)}" y="${r2(Math.min(top, base))}" width="${r2(bw)}" height="${r2(Math.abs(top - base))}" fill="${color}"/>`);
+                    const { at, w: bw } = across(i, band, inner, inner.bandwidth());
+                    const bx = px(j) + at;
+                    const rect = `<rect x="${r2(bx)}" y="${r2(Math.min(top, base))}" width="${r2(bw)}" height="${r2(Math.abs(top - base))}" fill="${color}"${own(op, name)}/>`;
+                    if (overlaid) layers.push({ j, size: Math.abs(v), svg: rect });
+                    else g.push(rect);
                     // The value at the bar's end, counting up as it grows, shrunk to fit the bar's width (or left off).
                     // Inside or outside is decided from the finished bar, so the value never jumps between them.
                     if (barValues === "off" || h <= 0) return;
@@ -460,7 +505,10 @@ export function render(table: Table, c: Config, t: number, fontCss = "", edit = 
                     if (inside && Math.abs(top - base) < size * 1.6) return;
                     const ly = inside ? (up ? top + size * 1.15 : top - size * 0.45) : up ? top - size * 0.45 : top + size * 1.15;
                     const fill = inside ? onBar(c, name, i) : color;
-                    g.push(`<text x="${r2(bx + bw / 2)}" y="${r2(ly)}" text-anchor="middle"${size < fs ? ` font-size="${r2(size)}"` : ""} fill="${fill}">${esc(label)}</text>`);
+                    const text = (at: number, over = fill) => `<text x="${r2(bx + bw / 2)}" y="${r2(at)}" text-anchor="middle"${size < fs ? ` font-size="${r2(size)}"` : ""} fill="${over}"${own(op, name)}>${esc(label)}</text>`;
+                    if (!overlaid) g.push(text(ly));
+                    else if (!up) atop.push(text(ly));
+                    else outward.push({ j, size: Math.abs(v), out: top - size * 0.45, inner: fits ? (Math.abs(top - base) >= size * 1.6 ? top + size * 1.15 : NaN) : null, final: fits ? end + size * 1.15 : null, preferInside: inside, ext: size * 1.15, on: onBar(c, name, i), color, svg: text });
                 });
             } else if (c.type === "scatter") {
                 vals[i].forEach((v, j) => {
@@ -491,6 +539,7 @@ export function render(table: Table, c: Config, t: number, fontCss = "", edit = 
             }
             out.push(`<g opacity="${r2(op)}"${tag(`series:${name}`)}>${g.join("")}</g>`);
         });
+        if (overlaid) out.push(...overlay(-1));
         for (const e of stack(ends, fs * 1.25, T, B)) out.push(`<text x="${r2(e.x)}" y="${r2(e.y)}" dy="0.35em" fill="${e.color}" opacity="${r2(e.op)}"${tag(`series:${e.name}`)}>${esc(e.text)}</text>`);
         out.push(lg.svg);
         return out.join("");
@@ -526,12 +575,16 @@ export function render(table: Table, c: Config, t: number, fontCss = "", edit = 
                 if (st.p <= 0) return;
                 const color = esc(seriesColor(c, name, i));
                 const g: string[] = [];
+                const { at, w: bw } = across(i, band.bandwidth(), inner, inner.bandwidth());
+                const op = st.effect === "fade" ? st.p : 1;
                 vals[i].forEach((v, j) => {
                     if (v == null) return;
                     const p = st.effect === "grow" ? st.p : st.effect === "draw" ? clamp01(st.p * rows.length - j) : st.effect === "each" ? each(st, j, rows.length) : 1;
                     const end = base + (x(v) - base) * p;
-                    const top = band(j)! + inner(i)!;
-                    g.push(`<rect x="${r2(Math.min(end, base))}" y="${r2(top)}" width="${r2(Math.abs(end - base))}" height="${r2(bw)}" fill="${color}"/>`);
+                    const top = band(j)! + at;
+                    const rect = `<rect x="${r2(Math.min(end, base))}" y="${r2(top)}" width="${r2(Math.abs(end - base))}" height="${r2(bw)}" fill="${color}"${own(op, name)}/>`;
+                    if (overlaid) layers.push({ j, size: Math.abs(v), svg: rect });
+                    else g.push(rect);
                     // The value past the bar's end or inside it, counting up as it grows; smaller when bars are thin
                     if (barValues !== "off" && p > 0 && bw >= fs * 0.5) {
                         const neg = end < base;
@@ -543,11 +596,15 @@ export function render(table: Table, c: Config, t: number, fontCss = "", edit = 
                         if (inside && !room(end)) return;
                         const lx = inside ? end + (neg ? size : -size) * 0.4 : end + (neg ? -size : size) * 0.4;
                         const fill = inside ? onBar(c, name, i) : color;
-                        g.push(`<text x="${r2(lx)}" y="${r2(top + bw / 2)}" dy="0.35em"${neg !== inside ? ' text-anchor="end"' : ""}${size < fs ? ` font-size="${r2(size)}"` : ""} fill="${fill}">${esc(label)}</text>`);
+                        const text = (x: number, over = fill, within = inside) => `<text x="${r2(x)}" y="${r2(top + bw / 2)}" dy="0.35em"${neg !== within ? ' text-anchor="end"' : ""}${size < fs ? ` font-size="${r2(size)}"` : ""} fill="${over}"${own(op, name)}>${esc(label)}</text>`;
+                        if (!overlaid) g.push(text(lx));
+                        else if (neg) atop.push(text(lx));
+                        else outward.push({ j, size: Math.abs(v), out: end + size * 0.4, inner: room(x(v)) ? (room(end) ? end - size * 0.4 : NaN) : null, final: room(x(v)) ? x(v) - size * 0.4 : null, preferInside: inside, ext: textWidth(label, c) * (size / fs) + size * 0.6, on: onBar(c, name, i), color, svg: text });
                     }
                 });
-                out.push(`<g opacity="${r2(st.effect === "fade" ? st.p : 1)}"${tag(`series:${name}`)}>${g.join("")}</g>`);
+                out.push(`<g opacity="${r2(op)}"${tag(`series:${name}`)}>${g.join("")}</g>`);
             });
+            if (overlaid) out.push(...overlay(1));
             out.push(lg.svg);
             return out.join("");
         }

@@ -204,6 +204,28 @@ test("bar values sit above the bar, or inside it in a colour that reads on the b
     assert.ok(values(early).length === 2 && render(table, early, 30).match(/fill="#[0-9a-f]+">\d/g) === null, "no value on a bar too short to hold it yet");
 });
 
+test("overlaid bars are the same size, biggest drawn first, and their values don't overlap", () => {
+    const table = parse("x,a,b,c\nq,6,10,9.6");
+    const base = { ...defaults(table), ys: ["a", "b", "c"], barLayout: "overlay" as const };
+    for (const type of ["bar", "hbar"] as ChartType[]) {
+        const svg = render(table, { ...base, type }, Infinity);
+        const bars = [...svg.matchAll(/<rect x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)" fill="#(?!111)/g)].slice(0, 3).map((m) => m.slice(1).map(Number));
+        const [pos, thick, long] = type === "bar" ? [0, 2, 3] : [1, 3, 2];
+        assert.ok(bars.every((b) => b[pos] === bars[0][pos] && b[thick] === bars[0][thick]), `${type} same spot and size`);
+        assert.ok(bars[0][long] > bars[1][long] && bars[1][long] > bars[2][long], `${type} biggest at the back: ${bars.map((b) => b[long])}`);
+        // The biggest bar's value past its end in its colour, the ones in front inside their own bars
+        const fill = (text: string) => svg.match(new RegExp(`fill="(#[0-9a-f]+)"[^>]*>${text}<`))![1];
+        assert.ok(fill("10.0") === seriesColor(base, "b", 1) && fill("9.6") === "#111111" && fill("6.0") === "#111111", `${type} ${fill("10.0")} ${fill("9.6")}`);
+        // Values inside, and 10 and 9.6 too close for both: 10 steps out past its own end, 9.6 stays inside its bar
+        const tight = render(table, { ...base, type, barValues: "inside" }, Infinity);
+        const where = (text: string) => tight.match(new RegExp(`<text x="([\\d.]+)" y="([\\d.]+)"[^>]*fill="(#[0-9a-f]+)"[^>]*>${text}<`))!.slice(1);
+        const [at10, at96] = [where("10.0"), where("9.6")].map((p) => +p[type === "bar" ? 1 : 0]);
+        // Vertical: a line apart. Horizontal: 9.6 ends inside its bar (right-aligned), 10.0 starts past the end
+        assert.ok(type === "bar" ? at96 - at10 >= base.fontSize : at10 > at96, `${type} apart: ${at10} ${at96}`);
+        assert.ok(where("10.0")[2] === seriesColor(base, "b", 1) && where("9.6")[2] === "#111111", `${type} 10 out in its colour, 9.6 inside`);
+    }
+});
+
 test("no label runs off the edge, whatever the numbers", () => {
     const cases = ["x,a\n0,1250000\n1000000,-2500000", "t,v\n2026-11-15T17:30:43,1\n2026-11-15T17:32:43,250000", "x,v\nA very long category name,5\nAnother long one,99999"];
     for (const csv of cases)

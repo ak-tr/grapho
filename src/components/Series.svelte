@@ -70,6 +70,12 @@
                 <input id="window" type="number" min="1" step="1" class="field" title="Each point becomes the average of this many points around it" bind:value={c.window} />
             </div>
         {/if}
+        {#if bars && c.ys.length > 1}
+            <div class="col-span-2">
+                <label class="label" for="barlayout">Bars for each {c.type === "hbar" ? "row" : "category"}</label>
+                <Select id="barlayout" bind:value={() => c.barLayout ?? "group", (v) => (c.barLayout = v)} options={[{ value: "group" as const, label: "Side by side" }, { value: "overlay" as const, label: "Overlaid, biggest at the back" }]} />
+            </div>
+        {/if}
         {#if bars}
             <div class="col-span-2">
                 <label class="label" for="barvals">Value on each bar</label>
