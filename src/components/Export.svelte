@@ -34,7 +34,7 @@
 </div>
 
 <fieldset class="grid gap-2">
-    <legend class="label">Still image</legend>
+    <legend class="section-title">Still image</legend>
     <div class="grid grid-cols-2 gap-[2px]">
         <button class="btn" disabled={!!busy} onclick={() => run("svg")}>SVG ↓</button>
         <button class="btn" disabled={!!busy} onclick={() => run("png")}>PNG ↓</button>
@@ -42,7 +42,7 @@
 </fieldset>
 
 <fieldset class="grid gap-2">
-    <legend class="label">Animated ({(total(doc.config.anim) / 1000).toFixed(1)}s, set up in Animate)</legend>
+    <legend class="section-title">Animated ({(total(doc.config.anim) / 1000).toFixed(1)}s, set up in Animate)</legend>
     <div class="grid grid-cols-2 gap-3">
         <div>
             <label class="label" for="fps">MP4 frame rate</label>

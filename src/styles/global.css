@@ -29,8 +29,13 @@ html {
     .check {
         @apply size-3.5 shrink-0 appearance-none border border-neutral-600 bg-tile-3 outline-none checked:border-invert checked:bg-invert focus-visible:border-white;
     }
-    .group-title {
-        @apply font-mono text-[11px] uppercase text-neutral-400;
+    /* Heads a group of fields: brighter than a field's label, with a rule running to the edge */
+    .section-title {
+        @apply mb-3 flex w-full items-center gap-3 font-mono text-[11px] uppercase text-neutral-300 after:h-px after:flex-1 after:bg-neutral-800;
+    }
+    /* A header menu (Charts, Export): a popover panel under the header's right edge */
+    .menu {
+        @apply fixed inset-auto right-4 top-12 m-0 mt-1 max-h-[calc(100dvh-4rem)] w-[min(360px,calc(100vw-2rem))] content-start overflow-y-auto border border-neutral-700 bg-black p-4 font-sans text-base normal-case tracking-normal text-neutral-200 [&:popover-open]:grid;
     }
 }
 
@@ -68,4 +73,19 @@ input[type="color"]::-moz-color-swatch {
         scrollbar-width: thin;
         scrollbar-color: rgb(var(--n-700)) transparent;
     }
+}
+
+/* The preview chart: every tagged part can be clicked, the key dragged */
+.editable [data-edit] {
+    cursor: pointer;
+}
+.editable [data-edit="legend"] {
+    cursor: move;
+}
+.editable text[data-edit]:hover,
+.editable g[data-edit]:not([data-edit="legend"]):hover text {
+    text-decoration: underline;
+}
+.editable [data-edit^="series:"]:hover {
+    filter: brightness(1.25);
 }
