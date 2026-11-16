@@ -11,6 +11,13 @@ import App from "../components/App.svelte";
         <title>Grapho</title>
         <meta name="description" content="Make graphs from your own data, then export them as images or animations." />
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+        <!-- The saved Mosaic theme, before first paint so it doesn't flash (ThemePicker.svelte changes it) -->
+        <script is:inline>
+            try {
+                const theme = localStorage.getItem("grapho:theme");
+                if (theme && theme !== "dakota-black") document.documentElement.dataset.theme = theme;
+            } catch {}
+        </script>
     </head>
     <body class="bg-black font-sans text-neutral-200 antialiased">
         <App client:only="svelte" />

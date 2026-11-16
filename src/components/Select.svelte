@@ -4,7 +4,11 @@
 -->
 <script lang="ts" generics="T extends string | number">
     type Option = { value: T; label: string; style?: string };
-    let { value = $bindable(), options, id, label }: { value: T; options: Option[]; id?: string; label?: string } = $props();
+    /**
+     * `prefix` goes before the current choice on the trigger (THEME / DAKOTA BLACK), and `compact` shows only the
+     * prefix on phones. `class` replaces the field look.
+     */
+    let { value = $bindable(), options, id, label, prefix, compact, class: cls }: { value: T; options: Option[]; id?: string; label?: string; prefix?: string; compact?: boolean; class?: string } = $props();
 
     const uid = $props.id();
     let trigger: HTMLButtonElement;
@@ -22,8 +26,11 @@
         const below = innerHeight - r.bottom - 8;
         const above = r.top - 8;
         const up = below < 200 && above > below;
+        // In the right half of the screen it opens leftwards from the trigger's right edge, so it stays on screen
+        const right = r.left > innerWidth / 2;
         Object.assign(menu.style, {
-            left: `${r.left}px`,
+            left: right ? "" : `${r.left}px`,
+            right: right ? `${innerWidth - r.right}px` : "",
             minWidth: `${r.width}px`,
             top: up ? "" : `${r.bottom + 2}px`,
             bottom: up ? `${innerHeight - r.top + 2}px` : "",
@@ -68,10 +75,10 @@
     aria-haspopup="true"
     aria-expanded={open}
     aria-label={label}
-    class="field flex items-center justify-between gap-2 text-left"
+    class="{cls ?? 'field'} flex items-center justify-between gap-2 text-left"
     onkeydown={(e) => (e.key === "ArrowDown" || e.key === "ArrowUp") && (e.preventDefault(), menu.showPopover())}
 >
-    <span class="truncate" style={current?.style}>{current?.label ?? ""}</span>
+    <span class="truncate" style={current?.style}>{#if prefix}{prefix}<span class={compact ? "max-sm:hidden" : ""}>{" / "}</span>{/if}<span class={compact ? "max-sm:hidden" : ""}>{current?.label ?? ""}</span></span>
     <span aria-hidden="true" class="text-[10px] text-neutral-500">▼</span>
 </button>
 <div bind:this={menu} id="{uid}-menu" popover class="fixed inset-auto m-0 overflow-y-auto border border-neutral-800 bg-tile p-0 font-mono text-xs text-neutral-400" onkeydown={keys} role="presentation">
