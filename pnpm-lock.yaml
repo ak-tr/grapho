@@ -17,6 +17,12 @@ importers:
       '@fontsource/onest':
         specifier: ^5.3.1
         version: 5.3.1
+      '@ui-sdk/core':
+        specifier: 0.1.0-beta.3
+        version: 0.1.0-beta.3
+      '@ui-sdk/svelte':
+        specifier: 0.1.0-beta.3
+        version: 0.1.0-beta.3(@ui-sdk/core@0.1.0-beta.3)(svelte@5.57.3)
       astro:
         specifier: ^7.4.12
         version: 7.4.12(esbuild@0.28.2)(jiti@1.21.7)(yaml@2.9.1)
@@ -899,6 +905,15 @@ packages:
 
   '@types/unist@3.0.3':
     resolution: {integrity: sha512-ko/gIFJRv177XgZsZcBwnqJN5x/Gien8qNOn0D5bQU/zAzVf9Zt3BlcUiLqhV9y4ARk0GbT3tnUiPNgnTXzc/Q==}
+
+  '@ui-sdk/core@0.1.0-beta.3':
+    resolution: {integrity: sha512-K2cMLsxY2jgX7Eu7UiP/DU14euO8KLIeDjMrDsM/JFj+faeLJAzAp0eUpTvQlTxRnhJhvTIhPwG8GO9ZOnEKdQ==}
+
+  '@ui-sdk/svelte@0.1.0-beta.3':
+    resolution: {integrity: sha512-tExS6MsPaWK9SCRN43LMtWXSWbomU1iiFvrMOUpwJ5ASsB61OBuaRzUyNhakbdV+TkbLTR9PIidN6i6/UVHOjQ==}
+    peerDependencies:
+      '@ui-sdk/core': ^0.1.0-beta.3
+      svelte: '>=5.33'
 
   '@ungap/structured-clone@1.4.0':
     resolution: {integrity: sha512-1mEZtMKPM09vDmQt5y7YvmN2+DFTP7Tg0EWXdic8/C6VRnpb33e4ghisCIE3WZjsE2N8mf+QV1Zqh7ZFYLWInQ==}
@@ -2760,6 +2775,13 @@ snapshots:
       '@types/unist': 3.0.3
 
   '@types/unist@3.0.3': {}
+
+  '@ui-sdk/core@0.1.0-beta.3': {}
+
+  '@ui-sdk/svelte@0.1.0-beta.3(@ui-sdk/core@0.1.0-beta.3)(svelte@5.57.3)':
+    dependencies:
+      '@ui-sdk/core': 0.1.0-beta.3
+      svelte: 5.57.3
 
   '@ungap/structured-clone@1.4.0': {}
 
