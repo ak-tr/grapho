@@ -118,3 +118,42 @@ export function smooth(values: (number | null)[], window: number): (number | nul
 }
 
 export const label = (v: Value) => (v instanceof Date ? v.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : String(v ?? ""));
+
+/**
+ * For long data, where each row is one value for one thing (date, category, name, value).
+ * `filterBy` = `filterValue` keeps only matching rows. `splitBy` turns the rows into one row per X value with a column
+ * per name, holding that name's `value`.
+ */
+export type Reshape = { filterBy?: string; filterValue?: string; splitBy?: string; value?: string };
+
+export const unique = (t: Table, column: string) => [...new Set(t.rows.map((r) => label(r[column])))];
+
+export function reshape(t: Table, x: string, r?: Reshape | null): Table {
+    let rows = t.rows;
+    if (r?.filterBy && t.columns.includes(r.filterBy)) rows = rows.filter((row) => label(row[r.filterBy!]) === r.filterValue);
+    const { splitBy: by, value } = r ?? {};
+    if (!by || !value || !t.columns.includes(by) || !t.columns.includes(value) || !t.columns.includes(x)) return { ...t, rows };
+    const names = unique({ ...t, rows }, by).filter((n) => n !== x);
+    const out = new Map<unknown, Row>();
+    for (const row of rows) {
+        const at = row[x] instanceof Date ? +row[x] : row[x];
+        if (!out.has(at)) out.set(at, Object.fromEntries([[x, row[x]], ...names.map((n) => [n, null])]));
+        if (label(row[by]) !== x) out.get(at)![label(row[by])] = row[value];
+    }
+    return { columns: [x, ...names], rows: [...out.values()], format: `${t.format}, split by ${by}` };
+}
+
+/**
+ * Spots long data: X values repeat and a text column says which series each row belongs to. That column (the one
+ * with the most different values) splits the series; a second text column with fewer values filters to its first one.
+ */
+export function suggest(t: Table, x: string): Reshape | null {
+    const xs = unique(t, x).length;
+    if (xs === t.rows.length) return null;
+    const texts = t.columns.filter((c) => c !== x && kind(t, c) === "category").map((c) => ({ c, n: unique(t, c).length })).filter((s) => s.n > 1).sort((a, b) => b.n - a.n);
+    const nums = numeric(t).filter((c) => c !== x && !/^id$/i.test(c));
+    if (!texts.length || !nums.length) return null;
+    const value = nums.find((c) => /value|percent|share|count|amount|total/i.test(c)) ?? nums[0];
+    const filter = texts.find((s, i) => i > 0 && s.n < texts[0].n);
+    return { splitBy: texts[0].c, value, ...(filter && { filterBy: filter.c, filterValue: unique(t, filter.c)[0] }) };
+}

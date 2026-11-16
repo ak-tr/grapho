@@ -1,6 +1,7 @@
-export type Effect = "draw" | "fade" | "grow";
+/** "each": bars, points or slices one after another, each eased on its own */
+export type Effect = "draw" | "fade" | "grow" | "each";
 export type Ease = "linear" | "in" | "out" | "in-out";
-/** `target` is "axes" or a series (column) name. `together` starts it with the previous step instead of after. */
+/** `target` is "axes", "title" or a series (column) name. `together` starts it with the previous step instead of after. */
 export type Step = { target: string; effect: Effect; ms: number; ease: Ease; together: boolean };
 /** `fps` is for MP4, `gifFps` for GIF (older saved charts may not have it). */
 export const MP4_FPS = [24, 25, 30, 50, 60];
@@ -9,7 +10,7 @@ export const GIF_FPS = [10, 20, 25, 50];
 
 export type Animation = { steps: Step[]; hold: number; rescale: boolean; fps: number; gifFps?: number };
 
-const eases: Record<Ease, (p: number) => number> = {
+export const eases: Record<Ease, (p: number) => number> = {
     linear: (p) => p,
     in: (p) => p * p * p,
     out: (p) => 1 - (1 - p) ** 3,
@@ -30,13 +31,19 @@ export function schedule(steps: Step[]) {
 
 export const total = (a: Animation) => schedule(a.steps).end + a.hold;
 
-/** Where every target is at time `t`. Targets without a step are fully shown (p = 1). */
+/** Where every target is at time `t`: `p` eased, `q` not. Targets without a step are fully shown (p = 1). */
+export type State = { effect: Effect; p: number; q: number; ease: Ease; start: number };
 export function at(a: Animation, t: number) {
-    const state = new Map<string, { effect: Effect; p: number; start: number }>();
+    const state = new Map<string, State>();
     for (const s of schedule(a.steps).timed) {
         if (state.has(s.target)) continue; // first step per target wins
         const raw = s.ms ? Math.min(1, Math.max(0, (t - s.start) / s.ms)) : t >= s.start ? 1 : 0;
-        state.set(s.target, { effect: s.effect, p: eases[s.ease](raw), start: s.start });
+        state.set(s.target, { effect: s.effect, p: eases[s.ease](raw), q: raw, ease: s.ease, start: s.start });
     }
-    return (target: string) => state.get(target) ?? { effect: "fade" as Effect, p: 1, start: -Infinity };
+    return (target: string): State => state.get(target) ?? { effect: "fade", p: 1, q: 1, ease: "linear", start: -Infinity };
+}
+
+/** For "each": how far item `j` of `n` is, each getting an equal slice of the step in turn */
+export function each(s: State, j: number, n: number) {
+    return eases[s.ease](Math.min(1, Math.max(0, s.q * n - j)));
 }

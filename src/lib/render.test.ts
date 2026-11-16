@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parse, smooth } from "./data.ts";
+import { parse, reshape, smooth, suggest } from "./data.ts";
 import { clip, compact, defaults, render, seriesColor, stack, type ChartType } from "./render.ts";
+import { fresh, load } from "./store.ts";
 import { at, schedule, total } from "./timeline.ts";
 
 test("parse detects the separator and types values", () => {
@@ -69,8 +70,25 @@ test("every chart type renders at every point in time without NaN", () => {
             const svg = render(table, c, t);
             assert.ok(svg.startsWith("<svg") && !svg.includes("NaN") && !svg.includes("undefined"), `${type} @ ${t}`);
             assert.ok(type === "pie" || !/[ ,ML]-\d{3,}/.test(svg), `${type} @ ${t} draws outside the chart`);
+            if (type === "bar") assert.ok(!render(table, { ...c, type: "hbar" }, t).includes("NaN"), `hbar @ ${t}`);
         }
     }
+});
+
+test("edit tags only appear in the preview, and a dragged legend stays on the chart", () => {
+    const table = parse("x,a,b\n0,1,2\n1,3,4");
+    const c = { ...defaults(table), legendAt: { x: 5, y: -1 } };
+    assert.ok(!render(table, c, Infinity).includes("data-edit"));
+    // The key doesn't fade in with its series: at the very start it's already there in full
+    const start = render(table, { ...c, legendAt: null }, 0);
+    assert.ok(/<g transform="translate\([^)]+\)"><g><rect[^>]+\/><text[^>]*>a<\/text>/.test(start), "key shown at t = 0");
+    const svg = render(table, c, Infinity, "", true);
+    assert.ok(svg.includes('data-edit="series:a"') && svg.includes('data-edit="y"'));
+    const [x, y, w] = svg.match(/data-box="([^"]+)"/)![1].split(" ").map(Number);
+    assert.ok(y > 0 && x + w < c.width && x > 0, `${x} ${y} ${w}`);
+    assert.ok(svg.includes(`fill="${c.colors.background}"/><rect`), "moved key sits on the chart background");
+    const h = (cfg: typeof c) => +render(table, cfg, Infinity, "", true).match(/data-box="([^"]+)"/)![1].split(" ")[3];
+    assert.ok(h({ ...c, legendStack: true }) > h(c) * 1.5, "stacked key has a row per series");
 });
 
 test("y axis fits the data", () => {
@@ -95,6 +113,10 @@ test("series on the right get their own axis and range", () => {
     assert.ok(left.every((v) => v >= 32 && v <= 35), `left ${left}`);
     assert.ok(right.length && right.every((v) => v >= 800 && v <= 2600), `right ${right}`);
     assert.ok(svg.includes("2.5k rpm") && svg.includes("rpm (R)"));
+    // End values sit by their lines, before the right axis numbers
+    const endX = +svg.match(/<text x="([\d.]+)"[^>]*>2.5k rpm</)![1];
+    const axisX = +svg.match(/<text x="([\d.]+)" y="[\d.]+" dy="0.35em">[\d.]+k?</)![1];
+    assert.ok(endX < axisX, `end ${endX} axis ${axisX}`);
     for (const type of ["bar", "area", "scatter"] as ChartType[]) assert.ok(!render(table, { ...c, type }, 500).includes("NaN"));
 });
 
@@ -111,13 +133,84 @@ test("large numbers use k, m and b", () => {
     assert.deepEqual([999, 1000, 2508, -12500, 1_250_000, 999_999.6, 3e9].map(f), ["999.0", "1k", "2.51k", "-12.5k", "1.25m", "1m", "3b"]);
 });
 
+test("large numbers can be written out in full", () => {
+    const table = parse("x,y\n0,1200\n1,2500000");
+    const c = { ...defaults(table), unit: " W" };
+    assert.ok(render(table, c, Infinity).includes("2.5m W"));
+    const full = render(table, { ...c, compact: false }, Infinity);
+    assert.ok(full.includes("2,500,000.0 W") && !/\d[km]</.test(full), "no k or m");
+});
+
+test("long data splits into one series per name, filtered by category", () => {
+    const t = parse(`date,category,name,change,percentage
+2008-11-01,AMD CPU Speeds,1.4 Ghz,-0.0004,0.0036
+2008-11-01,AMD CPU Speeds,1.5 Ghz,-0.0025,0.0224
+2008-11-01,Intel CPU Speeds,3.0 Ghz,0.01,0.3
+2008-12-01,AMD CPU Speeds,1.4 Ghz,0.0001,0.0037
+2008-12-01,AMD CPU Speeds,1.5 Ghz,0.0002,0.0226`);
+    const r = suggest(t, "date")!;
+    assert.deepEqual(r, { splitBy: "name", value: "percentage", filterBy: "category", filterValue: "AMD CPU Speeds" });
+    const wide = reshape(t, "date", r);
+    assert.deepEqual(wide.columns, ["date", "1.4 Ghz", "1.5 Ghz"]);
+    assert.deepEqual(wide.rows.map((row) => row["1.5 Ghz"]), [0.0224, 0.0226]);
+    // Without the filter, a name missing on a date is a gap
+    assert.deepEqual(reshape(t, "date", { ...r, filterBy: undefined }).rows.map((row) => row["3.0 Ghz"]), [0.3, null]);
+    assert.equal(suggest(parse("x,y\n0,1\n1,2"), "x"), null);
+    const c = { ...defaults(wide), percent: true };
+    assert.ok(render(wide, c, Infinity).includes("2.3%"));
+});
+
+test("one by one: bars finish in turn, and a title pushes the key down", () => {
+    const table = parse("x,y\na,10\nb,10\nc,10\nd,10");
+    const c = { ...defaults(table), type: "bar" as ChartType, ys: ["y"] };
+    c.anim = { ...c.anim, steps: [{ target: "y", effect: "each", ms: 1000, ease: "out", together: false }] };
+    const heights = (svg: string) => [...svg.matchAll(/<rect x="[\d.]+" y="[\d.]+" width="[\d.]+" height="([\d.]+)" fill="#8dd3c7"/g)].map((m) => +m[1]);
+    const mid = heights(render(table, c, 600)).slice(0, 4); // bars a and b done, c on its way, d not started (then the key)
+    assert.ok(mid[0] === mid[1] && mid[2] > 0 && mid[2] < mid[0] && mid[3] === 0, String(mid));
+    const keyY = (cfg: typeof c) => +render(table, cfg, Infinity).match(/<g transform="translate\([\d.]+ ([\d.]+)\)"/)![1];
+    const titled = { ...c, title: "CPU speeds" };
+    assert.ok(render(table, titled, Infinity).includes(">CPU speeds</text>") && keyY(titled) > keyY(c));
+});
+
+test("padding moves everything in, the background still fills the chart", () => {
+    const table = parse("x,y\n0,1\n1,2");
+    const svg = render(table, { ...defaults(table), padding: 40 }, Infinity);
+    assert.ok(svg.includes('<rect width="1200" height="600"') && svg.includes('<g transform="translate(40 40)">'));
+});
+
+test("the watermark is off by default and gets its own strip when on", () => {
+    const table = parse("x,y\n0,1\n1,2");
+    const c = defaults(table);
+    assert.ok(!render(table, c, Infinity).includes("grapho.akif.kr"));
+    const svg = render(table, { ...c, watermark: true }, Infinity, "", true);
+    assert.ok(svg.includes(">grapho.akif.kr</text>") && svg.includes(`data-inner="1200 ${600 - c.fontSize * 1.8}"`));
+});
+
+test("bar values sit above the bar, or inside it in a colour that reads on the bar", () => {
+    const table = parse("x,y\na,40\nb,90");
+    const c = { ...defaults(table), type: "bar" as ChartType };
+    const values = (cfg: typeof c) => [...render(table, cfg, Infinity).matchAll(/<text x="[\d.]+" y="([\d.]+)" text-anchor="middle"[^>]*fill="([^"]+)">(\d[^<]*)</g)];
+    const above = values(c);
+    assert.deepEqual(above.map((m) => m[3]), ["40.0", "90.0"]);
+    const inside = values({ ...c, barValues: "inside" });
+    assert.ok(inside.every((m, k) => +m[1] > +above[k][1] && m[2] === "#111111"), "inside, dark text on pastel bars");
+    assert.equal(values({ ...c, barValues: "off" }).length, 0);
+    for (const barValues of ["end", "inside"] as const) assert.ok(!render(table, { ...c, type: "hbar", barValues }, 700).includes("NaN"));
+    // The tallest bar reaching the top of its axis still gets its value above it
+    const full = values({ ...c, yMax: 90 });
+    assert.ok(full[1][2] !== "#111111" && full[1][3] === "90.0", "outside, in the bar's colour");
+    // While growing, a value that ends up inside isn't drawn outside first
+    const early = { ...c, barValues: "inside" as const, anim: { ...c.anim, steps: [{ target: "y", effect: "grow" as const, ms: 1000, ease: "linear" as const, together: false }] } };
+    assert.ok(values(early).length === 2 && render(table, early, 30).match(/fill="#[0-9a-f]+">\d/g) === null, "no value on a bar too short to hold it yet");
+});
+
 test("no label runs off the edge, whatever the numbers", () => {
     const cases = ["x,a\n0,1250000\n1000000,-2500000", "t,v\n2026-11-15T17:30:43,1\n2026-11-15T17:32:43,250000", "x,v\nA very long category name,5\nAnother long one,99999"];
     for (const csv of cases)
         for (const type of ["line", "area", "bar", "scatter"] as ChartType[]) {
             const t = parse(csv);
             const c = { ...defaults(t), type, unit: " RPM", yLabel: "Y", xLabel: "X" };
-            for (const cfg of [c, { ...c, right: [c.ys[0]], yLabel2: "Right", unit2: " W" }]) {
+            for (const cfg of [c, { ...c, compact: false }, { ...c, right: [c.ys[0]], yLabel2: "Right", unit2: " W" }, { ...c, type: "hbar" as ChartType }, { ...c, padding: 60, watermark: true }, { ...c, barValues: "inside" as const }]) {
                 const svg = render(t, cfg, Infinity);
                 for (const m of svg.matchAll(/<text x="([\d.-]+)"([^>]*)>([^<]+)</g)) {
                     const x = +m[1], w = m[3].length * c.fontSize * 0.62;
@@ -126,4 +219,10 @@ test("no label runs off the edge, whatever the numbers", () => {
                 }
             }
         }
+});
+
+test("long data for a single date puts the names along the X axis", () => {
+    const d = fresh();
+    load(d, "date,category,name,percentage\n2008-11-01,AMD,1.4 Ghz,0.0036\n2008-11-01,AMD,1.5 Ghz,0.0224");
+    assert.deepEqual([d.config.x, d.config.ys], ["name", ["percentage"]]);
 });
