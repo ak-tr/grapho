@@ -70,7 +70,7 @@ function cell(v: unknown, decimalComma = false): Value {
     if (decimalComma && /^-?\d+,\d+$/.test(s)) s = s.replace(",", ".");
     const dt = s.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2})?)(?:[.,](\d+))?(Z|[-+]\d{2}:\d{2})?$/);
     if (dt) s = `${dt[1]}T${dt[2]}${dt[3] ? "." + dt[3].slice(0, 3).padEnd(3, "0") : ""}${dt[4] ?? ""}`;
-    const t: unknown = autoType({ s }).s;
+    const t: unknown = autoType<{ s: unknown }, "s">({ s }).s;
     return typeof t === "boolean" ? s : Number.isNaN(t) ? null : (t as Value); // keep Value to text, numbers, dates
 }
 

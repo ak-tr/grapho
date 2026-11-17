@@ -1,0 +1,16 @@
+{
+    // Compiles src/lib/index.ts and what it imports to dist as JS + .d.ts. d3 stays an import, installed as a dependency.
+    "compilerOptions": {
+        "target": "ES2022",
+        "module": "ESNext",
+        "moduleResolution": "Bundler",
+        "lib": ["ES2023", "DOM"],
+        "strict": true,
+        "declaration": true,
+        "rewriteRelativeImportExtensions": true,
+        "skipLibCheck": true,
+        "rootDir": "../../src/lib",
+        "outDir": "dist"
+    },
+    "files": ["../../src/lib/index.ts"]
+}

@@ -1,0 +1,36 @@
+{
+  "name": "@ak-tr/grapho",
+  "version": "0.1.0",
+  "description": "Animated charts as SVG: line, area, scatter, bar and pie, from CSV, JSON or plain objects",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "prepublishOnly": "cd ../.. && pnpm build:lib"
+  },
+  "dependencies": {
+    "d3-array": "^3.2.5",
+    "d3-dsv": "^3.0.2",
+    "d3-scale": "^4.0.3",
+    "d3-shape": "^3.2.1"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ak-tr/grapho.git",
+    "directory": "packages/grapho"
+  },
+  "homepage": "https://grapho.akif.kr"
+}
