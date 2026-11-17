@@ -10,10 +10,12 @@
     const load = (csv: string) => loadInto(doc, csv);
 
     async function file(e: Event & { currentTarget: HTMLInputElement }) {
-        const f = e.currentTarget.files?.[0];
+        const input = e.currentTarget;
+        const f = input.files?.[0];
         if (!f) return;
         load(await f.text());
         if (doc.name === "Untitled chart") doc.name = f.name.replace(/\.\w+$/, "");
+        input.value = ""; // so picking the same file again (after editing it) loads it again
     }
 
     /** Pasting over everything counts as new data; pasting into part of it is just an edit. */
@@ -48,7 +50,7 @@
 <div>
     <label class="label" for="file">Import CSV, TSV or JSON</label>
     <input id="file" type="file" accept=".csv,.tsv,.tab,.psv,.txt,.dat,.json,text/csv,text/tab-separated-values,text/plain,application/json" onchange={file} class="field file:mr-3 file:border-0 file:bg-invert file:px-2 file:py-1 file:font-mono file:text-[11px] file:uppercase file:text-black" />
-    <p class="mt-1.5 font-mono text-[11px] text-neutral-500">Separators (comma, tab, semicolon, pipe) are detected. JSON can be a list of objects or a list of rows with a header row first.</p>
+    <p class="mt-1.5 font-mono text-[11px] text-neutral-500">Separators (comma, tab, semicolon, pipe) are detected. JSON can be a list of objects, a list of rows with a header row first, or an object of columns (&lbrace; "x": [...], "y": [...] &rbrace;), at any depth.</p>
 </div>
 
 <div>

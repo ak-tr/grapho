@@ -33,7 +33,7 @@ test("parse reads JSON rows", () => {
     assert.deepEqual(parse('[["x","y"],[1,"a"],[2,null]]').rows, want);
     assert.deepEqual(parse('{"data":[{"x":1,"y":"a"},{"x":2}]}').rows, want);
     assert.ok(parse("[1,").error);
-    assert.ok(parse('{"a":1}').error);
+    assert.ok(parse("[]").error);
 });
 
 test("smooth is a centred rolling average that skips gaps", () => {
@@ -59,6 +59,19 @@ test("steps run in turn, or together with the previous one", () => {
     assert.equal(at(a, 50)("b").p, 1);
     assert.equal(at(a, 50)("c").p, 0);
     assert.equal(at(a, 0)("unlisted").p, 1);
+});
+
+test("JSON in the shapes people have: rows, columns, nested, one object, a plain list", () => {
+    const shape = (v: unknown) => {
+        const t = parse(JSON.stringify(v, null, 2));
+        return [t.columns.join(","), t.rows.length, t.error ?? ""];
+    };
+    assert.deepEqual(shape([{ x: 1, y: 2 }, { x: 2, y: 4 }]), ["x,y", 2, ""]);
+    assert.deepEqual(shape({ x: [1, 2, 3], y: [4, 5, 6] }), ["x,y", 3, ""]);
+    assert.deepEqual(shape({ meta: { n: 2 }, data: { items: [{ x: 1, y: 2 }, { x: 2, y: 5 }] } }), ["x,y", 2, ""]);
+    assert.deepEqual(shape({ x: 1, y: 2 }), ["x,y", 1, ""]);
+    assert.deepEqual(shape([3, 1, 4]), ["value", 3, ""]);
+    assert.ok(shape({ nothing: { here: true } })[2]);
 });
 
 test("every chart type renders at every point in time without NaN", () => {

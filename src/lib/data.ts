@@ -74,16 +74,36 @@ function cell(v: unknown, decimalComma = false): Value {
     return typeof t === "boolean" ? s : Number.isNaN(t) ? null : (t as Value); // keep Value to text, numbers, dates
 }
 
-/** An array of objects, an array of arrays with a header row, or either one wrapped in an object (`{ "data": [...] }`). */
+const scalar = (v: unknown) => v === null || typeof v !== "object";
+
+/**
+ * Where the rows are in parsed JSON: a list; a list inside objects (`{ "data": { "items": [...] } }`, a few levels
+ * deep); an object of columns (`{ "x": [1, 2], "y": [3, 4] }`, as pandas and many APIs give); or one object, one row.
+ */
+function rowsIn(data: unknown, depth = 0): unknown[] | null {
+    if (Array.isArray(data)) return data.length ? data : null;
+    if (!data || typeof data !== "object" || depth > 3) return null;
+    const entries = Object.entries(data);
+    const columns = entries.filter(([, v]) => Array.isArray(v) && v.length && v.every(scalar)) as [string, unknown[]][];
+    if (columns.length > 1 && columns.every(([, v]) => v.length === columns[0][1].length)) return columns[0][1].map((_, i) => Object.fromEntries(columns.map(([k, v]) => [k, v[i]])));
+    for (const [, v] of entries) {
+        const rows = rowsIn(v, depth + 1);
+        if (rows) return rows;
+    }
+    return depth === 0 && entries.length && entries.every(([, v]) => scalar(v)) ? [data] : null;
+}
+
+/** An array of objects, an array of arrays with a header row, an object of columns, or any of them inside an object. */
 function json(text: string): Table {
-    let data: unknown;
+    let parsed: unknown;
     try {
-        data = JSON.parse(text);
+        parsed = JSON.parse(text);
     } catch (e) {
         return { columns: [], rows: [], format: "JSON", error: `Not valid JSON: ${(e as Error).message}` };
     }
-    if (!Array.isArray(data) && data && typeof data === "object") data = Object.values(data).find(Array.isArray);
-    if (!Array.isArray(data) || !data.length) return { columns: [], rows: [], format: "JSON", error: "Expected a list of rows, e.g. [{ \"x\": 1, \"y\": 2 }]" };
+    // A plain list of numbers or words is one column
+    const data = rowsIn(parsed)?.map((r) => (scalar(r) ? { value: r } : r));
+    if (!data) return { columns: [], rows: [], format: "JSON", error: "No rows found. Expected a list like [{ \"x\": 1, \"y\": 2 }], or columns like { \"x\": [1, 2], \"y\": [3, 4] }" };
 
     if (Array.isArray(data[0])) {
         const [head, ...body] = data as unknown[][];
