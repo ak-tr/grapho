@@ -1,6 +1,6 @@
 {
   "name": "@ak-tr/grapho",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Animated charts as SVG: line, area, scatter, bar and pie, from CSV, JSON or plain objects",
   "type": "module",
   "license": "MIT",

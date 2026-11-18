@@ -52,6 +52,11 @@ export type Drawn = {
     /** Plays the animation from the start; resolves when it ends or stop() is called */
     play(): Promise<void>;
     stop(): void;
+    /**
+     * Redraws with new data or options (given in full, as for draw), at the same moment of the animation.
+     * A playing animation keeps playing. For frameworks: call it when props change, instead of drawing again.
+     */
+    update(data: Data, options?: Options): void;
 };
 
 /**
@@ -59,32 +64,46 @@ export type Drawn = {
  * The chart is an SVG, so it stays sharp at any size. play() runs its animation.
  */
 export function draw(el: Element, data: Data, options: Options = {}): Drawn {
-    const { table, config } = chart(data, options);
-    const duration = total(config.anim);
     let frame = 0;
     let finish = () => {};
-    const seek = (t: number) => {
-        el.innerHTML = render(table, config, Math.min(t, duration));
-        el.firstElementChild?.setAttribute("style", "display:block;width:100%;height:auto");
+    // Where the animation is; Infinity = fully shown, however long the animation becomes
+    let now = Infinity;
+    const drawn: Drawn = {
+        ...chart(data, options),
+        duration: 0,
+        seek(t) {
+            now = t;
+            el.innerHTML = render(drawn.table, drawn.config, Math.min(t, drawn.duration));
+            el.firstElementChild?.setAttribute("style", "display:block;width:100%;height:auto");
+        },
+        stop() {
+            cancelAnimationFrame(frame);
+            finish();
+        },
+        play() {
+            drawn.stop();
+            return new Promise<void>((done) => {
+                let start: number | undefined;
+                finish = () => {
+                    finish = () => {};
+                    done();
+                };
+                const tick = (ms: number) => {
+                    start ??= ms;
+                    drawn.seek(ms - start);
+                    if (ms - start < drawn.duration) frame = requestAnimationFrame(tick);
+                    else (now = Infinity), finish();
+                };
+                frame = requestAnimationFrame(tick);
+            });
+        },
+        update(data, options = {}) {
+            Object.assign(drawn, chart(data, options));
+            drawn.duration = total(drawn.config.anim);
+            drawn.seek(now);
+        },
     };
-    const stop = () => {
-        cancelAnimationFrame(frame);
-        finish();
-    };
-    const play = () => {
-        stop();
-        return new Promise<void>((done) => {
-            finish = done;
-            let start: number | undefined;
-            const tick = (now: number) => {
-                start ??= now;
-                seek(now - start);
-                if (now - start < duration) frame = requestAnimationFrame(tick);
-                else done();
-            };
-            frame = requestAnimationFrame(tick);
-        });
-    };
-    seek(duration);
-    return { table, config, duration, seek, play, stop };
+    drawn.duration = total(drawn.config.anim);
+    drawn.seek(now);
+    return drawn;
 }

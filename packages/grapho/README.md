@@ -19,9 +19,88 @@ const chart = draw(document.getElementById("chart"), [
 ], { type: "line", title: "Sales" });
 
 chart.play(); // the animation; chart.seek(ms) shows one moment of it, chart.stop() ends it
+chart.update(newRows, { type: "bar" }); // redraw with new data or options, mid-animation too
 ```
 
 The chart fills the element's width. Data can be CSV, TSV or JSON text, an array of rows, or an object of columns (`{ month: [...], north: [...] }`). Numbers and ISO dates are typed for you.
+
+## In a framework
+
+Draw in an effect that runs again when the data or options change, and return `stop` as its cleanup. A change mid-animation shows the new chart fully drawn; to keep the animation playing instead, keep the chart and call `chart.update(data, options)`.
+
+### React
+
+```jsx
+import { useEffect, useRef } from "react";
+import { draw } from "@ak-tr/grapho";
+
+export function Chart({ data, options }) {
+    const el = useRef(null);
+    useEffect(() => draw(el.current, data, options).stop, [data, options]);
+    return <div ref={el} />;
+}
+```
+
+Keep `options` stable (`useMemo`, or outside the component), or the chart redraws on every render.
+
+### Vue
+
+```vue
+<script setup>
+import { ref, watchPostEffect } from "vue";
+import { draw } from "@ak-tr/grapho";
+
+const props = defineProps(["data", "options"]);
+const el = ref(null);
+watchPostEffect((onCleanup) => onCleanup(draw(el.value, props.data, props.options).stop));
+</script>
+
+<template><div ref="el" /></template>
+```
+
+It redraws when anything `draw` reads changes, nested options included.
+
+### Svelte 5
+
+```svelte
+<script>
+    import { draw } from "@ak-tr/grapho";
+
+    let { data, options = {} } = $props();
+    let el;
+    $effect(() => draw(el, data, options).stop);
+</script>
+
+<div bind:this={el}></div>
+```
+
+### Astro
+
+A still chart needs no JavaScript on the page: render it on the server with `svg()`.
+
+```astro
+---
+import { svg } from "@ak-tr/grapho";
+const rows = await (await fetch("https://example.com/sales.json")).json();
+---
+<div class="chart" set:html={svg(rows, { type: "bar" })} />
+
+<style>
+    .chart :global(svg) { display: block; width: 100%; height: auto; }
+</style>
+```
+
+To animate it, draw in a `<script>` instead (Astro bundles it for the browser):
+
+```astro
+<div id="chart"></div>
+<script>
+    import { draw } from "@ak-tr/grapho";
+    draw(document.getElementById("chart"), "day,a\n1,10\n2,15").play();
+</script>
+```
+
+The same goes for server rendering in Next, Nuxt or SvelteKit: `svg()` works on the server, and `draw()` takes over in the browser. On a server, text widths are estimated rather than measured, so the browser's redraw can move labels by a few pixels.
 
 ## Options
 
